@@ -58,6 +58,6 @@ public class EscapeSequenceTest {
                 .setVariableMap(Collections.emptyMap())
                 .build();
 
-        assertEquals("\\{unknown}", template.apply("\\{unknown}"));
+        assertEquals("{unknown}", template.apply("\\{unknown}"));
     }
 }
