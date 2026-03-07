@@ -15,14 +15,18 @@ public class MapTemplateBenchmark {
 
         String testStr = "Hello {name}, your age is {age}. {missing} and {test}";
 
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
         // Warmup
         for (int i = 0; i < 1000; i++) {
-            MapTemplate.apply(testStr, map);
+            template.apply(testStr);
         }
 
         long start = System.currentTimeMillis();
         for (int i = 0; i < 10000; i++) {
-            MapTemplate.apply(testStr, map);
+            template.apply(testStr);
         }
         long end = System.currentTimeMillis();
         System.out.println("Time taken: " + (end - start) + "ms");
