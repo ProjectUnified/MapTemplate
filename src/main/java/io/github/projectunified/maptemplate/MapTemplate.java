@@ -203,9 +203,6 @@ public class MapTemplate {
      * @return the result
      */
     public Object apply(Object obj, Map<String, Object> variableMap) {
-        if (variableMap == null || variableMap.isEmpty()) {
-            return obj;
-        }
         if (obj instanceof Collection) {
             return apply((Collection<?>) obj, variableMap);
         }
