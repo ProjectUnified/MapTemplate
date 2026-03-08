@@ -125,4 +125,11 @@ public class NestedVariableTest {
 
         assertEquals("Success", template.apply("{test_\\{property}_test}"));
     }
+
+    @Test
+    public void testEscapedNestedVariableNoVariableMap() {
+        MapTemplate template = MapTemplate.builder().build();
+
+        assertEquals("{test_{property}_test}", template.apply("{test_\\{property}_test}"));
+    }
 }
