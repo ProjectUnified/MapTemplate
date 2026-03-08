@@ -113,4 +113,16 @@ public class NestedVariableTest {
 
         assertEquals("value}", template.apply("{test}}"));
     }
+
+    @Test
+    public void testEscapedNestedVariable() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("test_{property}_test", "Success");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        assertEquals("Success", template.apply("{test_\\{property}_test}"));
+    }
 }

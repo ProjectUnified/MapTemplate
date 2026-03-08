@@ -14,6 +14,7 @@ public class MapTemplateBenchmark {
         map.put("test", "test");
 
         String testStr = "Hello {name}, your age is {age}. {missing} and {test}";
+        String resultStr = "Hello John, your age is 25. {missing} and test";
 
         MapTemplate template = MapTemplate.builder()
                 .setVariableMap(map)
@@ -21,12 +22,18 @@ public class MapTemplateBenchmark {
 
         // Warmup
         for (int i = 0; i < 1000; i++) {
-            template.apply(testStr);
+            Object s = template.apply(testStr);
+            if (!s.equals(resultStr)) {
+                throw new AssertionError("Result strings don't match");
+            }
         }
 
         long start = System.currentTimeMillis();
         for (int i = 0; i < 10000; i++) {
-            template.apply(testStr);
+            Object s = template.apply(testStr);
+            if (!s.equals(resultStr)) {
+                throw new AssertionError("Result strings don't match");
+            }
         }
         long end = System.currentTimeMillis();
         System.out.println("Time taken: " + (end - start) + "ms");

@@ -173,67 +173,66 @@ public class MapTemplate {
         }
 
         StringBuilder content = new StringBuilder(string);
-        Deque<Integer> startMarkerIndices = new ArrayDeque<>();
-        int currentIndex = 0;
+        Deque<Opener> stack = new ArrayDeque<>();
+        int i = 0;
 
-        while (currentIndex < content.length()) {
-            int nextStart = content.indexOf(startVariable, currentIndex);
-            int nextEnd = content.indexOf(endVariable, currentIndex);
+        while (i < content.length()) {
+            int start = content.indexOf(startVariable, i);
+            int end = content.indexOf(endVariable, i);
 
-            // If no more end markers are found, no more variables can be resolved
-            if (nextEnd == -1) {
+            // No more variables can be resolved if there's no end marker
+            if (end == -1) {
                 break;
             }
 
-            // Case 1: We found a start marker before the current end marker.
-            // This could be the start of a new variable or a nested variable.
-            if (nextStart != -1 && nextStart < nextEnd) {
-                int escapeCount = countPrefix(content, nextStart, escapeChar);
-                int startOfEscapes = nextStart - (escapeCount * escapeChar.length());
-                String reducedEscapes = repeat(escapeChar, escapeCount / 2);
+            // Determine if we are processing a start marker or an end marker
+            boolean isStart = (start != -1 && start < end);
+            int markerPos = isStart ? start : end;
+            String marker = isStart ? startVariable : endVariable;
 
-                if (escapeCount % 2 != 0) {
-                    // The start marker is escaped (e.g., \{).
-                    // We reduce the escape characters and treat the start marker as literal text.
-                    String replacement = reducedEscapes + startVariable;
-                    content.replace(startOfEscapes, nextStart + startVariable.length(), replacement);
-                    currentIndex = startOfEscapes + replacement.length();
+            // 1. Unescape the marker and its prefix (e.g., \\{ -> \{ or \\\\{ -> \\{)
+            int escapeCount = countPrefix(content, markerPos, escapeChar);
+            int escapeStart = markerPos - (escapeCount * escapeChar.length());
+            String reducedEscapes = repeat(escapeChar, escapeCount / 2);
+            boolean escaped = (escapeCount % 2 != 0);
+
+            content.replace(escapeStart, markerPos + marker.length(), reducedEscapes + marker);
+            int actualPos = escapeStart + reducedEscapes.length();
+
+            // 2. Handle the marker logic based on its type and escape state
+            if (isStart) {
+                // If it's a start marker, push to stack (tracking if it was escaped)
+                stack.push(new Opener(actualPos, escaped));
+                i = actualPos + startVariable.length();
+            } else if (escaped || stack.isEmpty()) {
+                // Escaped end marker or unmatched end marker: just skip it
+                i = actualPos + endVariable.length();
+            } else {
+                // Balanced unescaped end marker found: perform variable resolution
+                Opener opener = stack.pop();
+                if (opener.isEscaped) {
+                    // This end balances an escaped start (balanced literal block): skip it
+                    i = actualPos + endVariable.length();
                 } else {
-                    // The start marker is NOT escaped.
-                    // We reduce the escape characters and push the new start position onto the stack.
-                    content.replace(startOfEscapes, nextStart, reducedEscapes);
-                    int actualStartPos = startOfEscapes + reducedEscapes.length();
-                    startMarkerIndices.push(actualStartPos);
-                    currentIndex = actualStartPos + startVariable.length();
-                }
-            }
-            // Case 2: we found an end marker first.
-            // We try to resolve the variable name between the last start marker and this end marker.
-            else {
-                if (startMarkerIndices.isEmpty()) {
-                    // No matching start marker was found for this end marker, so we skip it.
-                    currentIndex = nextEnd + endVariable.length();
-                } else {
-                    int startPos = startMarkerIndices.pop();
-                    String variableName = content.substring(startPos + startVariable.length(), nextEnd);
+                    // We found a variable name between the unescaped start and end markers
+                    String variableName = content.substring(opener.index + startVariable.length(), actualPos);
                     Object value = variableFunction.apply(variableName);
 
                     if (value != null) {
-                        // Variable found! Resolve its value (handles recursive references).
-                        Object resolvedValue = apply(value);
+                        Object resolved = apply(value);
 
-                        // If the entire original content was exactly this variable, return the object directly.
-                        if (startPos == 0 && nextEnd + endVariable.length() == content.length()) {
-                            return resolvedValue;
+                        // If the entire original string was precisely this variable, return the object directly
+                        if (opener.index == 0 && actualPos + endVariable.length() == content.length()) {
+                            return resolved;
                         }
 
-                        // Otherwise, replace the `{variable}` text with its resolved string value.
-                        String replacement = Objects.toString(resolvedValue);
-                        content.replace(startPos, nextEnd + endVariable.length(), replacement);
-                        currentIndex = startPos + replacement.length();
+                        // Otherwise, replace the `{variable}` text with its string representation
+                        String replacement = Objects.toString(resolved);
+                        content.replace(opener.index, actualPos + endVariable.length(), replacement);
+                        i = opener.index + replacement.length();
                     } else {
-                        // Variable not found in the map, so we leave it as is and continue.
-                        currentIndex = nextEnd + endVariable.length();
+                        // Variable not found in map: leave it as-is and continue
+                        i = actualPos + endVariable.length();
                     }
                 }
             }
@@ -274,6 +273,16 @@ public class MapTemplate {
             return applyString((String) obj);
         }
         return obj;
+    }
+
+    private static class Opener {
+        final int index;
+        final boolean isEscaped;
+
+        Opener(int index, boolean isEscaped) {
+            this.index = index;
+            this.isEscaped = isEscaped;
+        }
     }
 
     /**
