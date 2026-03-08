@@ -6,7 +6,7 @@
 
     <groupId>io.github.projectunified</groupId>
     <artifactId>map-template</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 
     <name>MapTemplate</name>
     <description>A library to apply variables to objects</description>
