@@ -1,0 +1,1 @@
+typeSearchIndex = [{"l":"All Classes and Interfaces","u":"allclasses-index.html"},{"p":"io.github.projectunified.maptemplate","l":"MapTemplate.Builder"},{"p":"io.github.projectunified.maptemplate","l":"MapTemplate"},{"p":"io.github.projectunified.maptemplate","l":"MapTemplate.Options"}];updateSearchResults();
