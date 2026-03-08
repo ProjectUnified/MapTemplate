@@ -40,6 +40,31 @@ public class NestedVariableTest {
     }
 
     @Test
+    public void testDeepNesting() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("property", "name");
+        map.put("test_name_value", "Result");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        assertEquals("Result", template.apply("{test_{property}_value}"));
+    }
+
+    @Test
+    public void testIncompleteNesting() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("test_value", "123");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        assertEquals("{test_123", template.apply("{test_{test_value}"));
+    }
+
+    @Test
     public void testFlatteningList() {
         Map<String, Object> map = new HashMap<>();
         map.put("names", Arrays.asList("John", "Doe"));
@@ -75,5 +100,17 @@ public class NestedVariableTest {
         assertEquals(2, result.size());
         assertEquals("v1", result.get("k1"));
         assertEquals("v2", result.get("k2"));
+    }
+
+    @Test
+    public void testTrailingEndMarker() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("test", "value");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        assertEquals("value}", template.apply("{test}}"));
     }
 }
