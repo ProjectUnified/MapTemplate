@@ -127,6 +127,19 @@ public class NestedVariableTest {
     }
 
     @Test
+    public void testMultipleStartMarkers() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("test", "Success");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        // One { is remains, one { is matched with }
+        assertEquals("{Success", template.apply("{{test}"));
+    }
+
+    @Test
     public void testEscapedNestedVariableNoVariableMap() {
         MapTemplate template = MapTemplate.builder().build();
 
