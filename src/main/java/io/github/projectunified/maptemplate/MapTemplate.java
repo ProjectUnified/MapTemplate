@@ -46,32 +46,6 @@ public class MapTemplate {
         return new Builder();
     }
 
-    /**
-     * Attempts to resolve the given text as a variable name.
-     * A variable name is expected to be wrapped in the configured start and end markers (e.g., "{variable}").
-     *
-     * @param text the text that might be a variable name
-     * @return the resolved object if found, otherwise null
-     */
-    private Object getVariableValue(String text) {
-        // A valid variable must start and end with the markers and have at least one character in between
-        int minimumLength = startVariable.length() + endVariable.length() + 1;
-        if (text.length() < minimumLength || !text.startsWith(startVariable) || !text.endsWith(endVariable)) {
-            return null;
-        }
-
-        // Extract the name from inside the markers
-        String variableName = text.substring(startVariable.length(), text.length() - endVariable.length());
-
-        // Look up the value associated with this name
-        Object value = variableFunction.apply(variableName);
-        if (value == null) {
-            return null;
-        }
-
-        // Recursively apply the template to the value in case it contains other variables
-        return apply(value);
-    }
 
     /**
      * Applies variables to each element of a collection.
@@ -90,18 +64,15 @@ public class MapTemplate {
 
                     String text = (String) element;
 
-                    // If the string is exactly a variable (e.g., "{my_list}"), try to resolve and flatten it
-                    Object variableValue = getVariableValue(text);
-                    if (variableValue != null) {
-                        if (variableValue instanceof Collection) {
-                            // Flattening: if the variable points to a list, we add all its items to our stream
-                            return ((Collection<?>) variableValue).stream();
-                        }
-                        return Stream.of(variableValue);
+                    // Apply template replacement
+                    Object resolved = apply(text);
+
+                    // If the result is a collection, flatten it (e.g., "{my_list}" -> [item1, item2])
+                    if (resolved instanceof Collection) {
+                        return ((Collection<?>) resolved).stream();
                     }
 
-                    // Otherwise, apply template replacement for any partial variables inside the string
-                    return Stream.of(apply(text));
+                    return Stream.of(resolved);
                 });
 
         // Collect into a new collection of the same general type
@@ -134,15 +105,14 @@ public class MapTemplate {
 
                     String keyText = (String) key;
 
-                    // If the key is exactly a variable (e.g., "{extra_data}"), try to merge that map's data
-                    Object variableValue = getVariableValue(keyText);
-                    if (variableValue instanceof Map) {
-                        // Merging: if the variable points to a map, we add all its entries to our result
-                        return ((Map<?, ?>) variableValue).entrySet().stream();
+                    Object resolvedKey = apply(keyText);
+
+                    // If the resolved key is a map, merge its entries (e.g., "{extra_data}" -> {k1: v1, k2: v2})
+                    if (resolvedKey instanceof Map) {
+                        return ((Map<?, ?>) resolvedKey).entrySet().stream();
                     }
 
-                    // Otherwise, keep the key and process the value recursively
-                    return Stream.of(new AbstractMap.SimpleEntry<>(key, apply(value)));
+                    return Stream.of(new AbstractMap.SimpleEntry<>(resolvedKey, apply(value)));
                 });
 
         // Collect into a new map, maintaining order where appropriate
@@ -164,12 +134,6 @@ public class MapTemplate {
     private Object applyString(String string) {
         if (variableFunction == null) {
             return string;
-        }
-
-        // Optimization: check if the entire string is exactly a variable name
-        Object directValue = getVariableValue(string);
-        if (directValue != null) {
-            return apply(directValue);
         }
 
         StringBuilder content = new StringBuilder(string);

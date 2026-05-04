@@ -103,6 +103,23 @@ public class NestedVariableTest {
     }
 
     @Test
+    public void testKeyReplacement() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", "John");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        Map<String, String> target = new HashMap<>();
+        target.put("{name}", "value");
+
+        Map<?, ?> result = (Map<?, ?>) template.apply(target);
+        assertEquals(1, result.size());
+        assertEquals("value", result.get("John"));
+    }
+
+    @Test
     public void testTrailingEndMarker() {
         Map<String, Object> map = new HashMap<>();
         map.put("test", "value");
@@ -144,5 +161,19 @@ public class NestedVariableTest {
         MapTemplate template = MapTemplate.builder().build();
 
         assertEquals("{test_{property}_test}", template.apply("{test_\\{property}_test}"));
+    }
+
+    @Test
+    public void testAdjacentVariables() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("test1", "Val1");
+        map.put("test2", "Val2");
+        map.put("test1}{test2", "Wrong");
+
+        MapTemplate template = MapTemplate.builder()
+                .setVariableMap(map)
+                .build();
+
+        assertEquals("Val1Val2", template.apply("{test1}{test2}"));
     }
 }
