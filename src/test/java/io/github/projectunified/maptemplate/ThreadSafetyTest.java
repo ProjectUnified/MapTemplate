@@ -14,9 +14,9 @@ public class ThreadSafetyTest {
     @Test
     public void testThreadSafety() throws InterruptedException, ExecutionException {
         Map<String, Object> map = Collections.singletonMap("key", "value");
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build();
+                .build());
 
         int threadCount = 10;
         int iterationsPerThread = 1000;
@@ -49,9 +49,9 @@ public class ThreadSafetyTest {
         map.put("b", "{a}");
         map.put("c", "{b}");
 
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build();
+                .build());
 
         int threadCount = 10;
         int iterationsPerThread = 500;

@@ -16,9 +16,9 @@ public class MapTemplateBenchmark {
         String testStr = "Hello {name}, your age is {age}. {missing} and {test}";
         String resultStr = "Hello John, your age is 25. {missing} and test";
 
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build();
+                .build());
 
         // Warmup
         for (int i = 0; i < 1000; i++) {

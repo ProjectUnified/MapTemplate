@@ -11,7 +11,7 @@ public class CollectionMapTest {
     @Test
     public void testList() {
         Map<String, Object> map = Collections.singletonMap("name", "John");
-        MapTemplate template = MapTemplate.builder().setVariableMap(map).build();
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder().setVariableMap(map).build());
 
         List<String> list = Arrays.asList("Hello {name}", "{name}", "pure string");
         List<?> result = (List<?>) template.apply(list);
@@ -25,7 +25,7 @@ public class CollectionMapTest {
     @Test
     public void testSet() {
         Map<String, Object> map = Collections.singletonMap("name", "John");
-        MapTemplate template = MapTemplate.builder().setVariableMap(map).build();
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder().setVariableMap(map).build());
 
         Set<String> set = new HashSet<>(Collections.singletonList("{name}"));
         Set<?> result = (Set<?>) template.apply(set);
@@ -37,7 +37,7 @@ public class CollectionMapTest {
     @Test
     public void testMap() {
         Map<String, Object> varMap = Collections.singletonMap("name", "John");
-        MapTemplate template = MapTemplate.builder().setVariableMap(varMap).build();
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder().setVariableMap(varMap).build());
 
         Map<String, String> targetMap = new HashMap<>();
         targetMap.put("greeting", "Hello {name}");
@@ -52,7 +52,7 @@ public class CollectionMapTest {
     @Test
     public void testNestedStructures() {
         Map<String, Object> varMap = Collections.singletonMap("name", "John");
-        MapTemplate template = MapTemplate.builder().setVariableMap(varMap).build();
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder().setVariableMap(varMap).build());
 
         Map<String, Object> nested = new HashMap<>();
         nested.put("list", Arrays.asList("{name}", "static"));

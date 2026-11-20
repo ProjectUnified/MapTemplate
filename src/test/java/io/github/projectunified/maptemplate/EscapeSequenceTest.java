@@ -9,54 +9,54 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class EscapeSequenceTest {
     @Test
     public void testSingleEscape() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("{name}", template.apply("\\{name}"));
     }
 
     @Test
     public void testDoubleEscape() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("\\John", template.apply("\\\\{name}"));
     }
 
     @Test
     public void testTripleEscape() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("\\{name}", template.apply("\\\\\\{name}"));
     }
 
     @Test
     public void testQuadrupleEscape() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("\\\\John", template.apply("\\\\\\\\{name}"));
     }
 
     @Test
     public void testEscapeInMiddle() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("Hello {name}!", template.apply("Hello \\{name}!"));
     }
 
     @Test
     public void testEscapedNoVariable() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.emptyMap())
-                .build();
+                .build());
 
         assertEquals("{unknown}", template.apply("\\{unknown}"));
     }

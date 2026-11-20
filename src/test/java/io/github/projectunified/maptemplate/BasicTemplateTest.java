@@ -15,9 +15,9 @@ public class BasicTemplateTest {
         map.put("name", "John");
         map.put("age", 25);
 
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build();
+                .build());
 
         assertEquals("John", template.apply("{name}"));
         assertEquals(25, template.apply("{age}"));
@@ -26,9 +26,9 @@ public class BasicTemplateTest {
 
     @Test
     public void testMissingVariable() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build();
+                .build());
 
         assertEquals("{missing}", template.apply("{missing}"));
         assertEquals("Hello John, {missing}", template.apply("Hello {name}, {missing}"));
@@ -36,9 +36,9 @@ public class BasicTemplateTest {
 
     @Test
     public void testEmptyMap() {
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(Collections.emptyMap())
-                .build();
+                .build());
 
         assertEquals("{name}", template.apply("{name}"));
     }
@@ -48,9 +48,9 @@ public class BasicTemplateTest {
         Map<String, Object> map = new HashMap<>();
         map.put("name", null);
 
-        MapTemplate template = MapTemplate.builder()
+        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build();
+                .build());
 
         assertEquals("{name}", template.apply("{name}"));
     }
