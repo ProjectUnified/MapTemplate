@@ -12,6 +12,12 @@ public class CompositeStringReplacer {
     private final List<Function<String, Object>> replacers = new ArrayList<>();
 
     /**
+     * Create an empty collection of replacers.
+     */
+    public CompositeStringReplacer() {
+    }
+
+    /**
      * Adds a replacer to run after the previously added ones.
      *
      * @param replacer the replacer to add

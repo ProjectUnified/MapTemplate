@@ -6,10 +6,15 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class NestedVariableTest {
+    private static Function<String, Object> replacer(Map<String, Object> variables) {
+        return VariableStringReplacer.builder().setVariableMap(variables).build();
+    }
+
     @Test
     public void testRecursiveReplacement() {
         Map<String, Object> map = new HashMap<>();
@@ -17,11 +22,7 @@ public class NestedVariableTest {
         map.put("lastName", "Doe");
         map.put("fullName", "{firstName} {lastName}");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("John Doe", template.apply("{fullName}"));
+        assertEquals("John Doe", MapTemplate.mark("{fullName}").apply(replacer(map)));
     }
 
     @Test
@@ -32,11 +33,7 @@ public class NestedVariableTest {
         map.put("c", "done");
         map.put("start", "{a}");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("done", template.apply("{c}"));
+        assertEquals("done", MapTemplate.mark("{c}").apply(replacer(map)));
     }
 
     @Test
@@ -45,11 +42,7 @@ public class NestedVariableTest {
         map.put("property", "name");
         map.put("test_name_value", "Result");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("Result", template.apply("{test_{property}_value}"));
+        assertEquals("Result", MapTemplate.mark("{test_{property}_value}").apply(replacer(map)));
     }
 
     @Test
@@ -57,11 +50,7 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("test_value", "123");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("{test_123", template.apply("{test_{test_value}"));
+        assertEquals("{test_123", MapTemplate.mark("{test_{test_value}").apply(replacer(map)));
     }
 
     @Test
@@ -69,11 +58,7 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("names", Arrays.asList("John", "Doe"));
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        List<?> result = (List<?>) template.apply(Arrays.asList("Start", "{names}", "End"));
+        List<?> result = (List<?>) MapTemplate.mark(Arrays.asList("Start", "{names}", "End")).apply(replacer(map));
         assertEquals(4, result.size());
         assertEquals("Start", result.get(0));
         assertEquals("John", result.get(1));
@@ -89,14 +74,10 @@ public class NestedVariableTest {
         data.put("k2", "v2");
         map.put("extra", data);
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
         Map<String, String> target = new HashMap<>();
         target.put("{extra}", "dummy");
 
-        Map<?, ?> result = (Map<?, ?>) template.apply(target);
+        Map<?, ?> result = (Map<?, ?>) MapTemplate.mark(target).apply(replacer(map));
         assertEquals(2, result.size());
         assertEquals("v1", result.get("k1"));
         assertEquals("v2", result.get("k2"));
@@ -107,14 +88,10 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("name", "John");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
         Map<String, String> target = new HashMap<>();
         target.put("{name}", "value");
 
-        Map<?, ?> result = (Map<?, ?>) template.apply(target);
+        Map<?, ?> result = (Map<?, ?>) MapTemplate.mark(target).apply(replacer(map));
         assertEquals(1, result.size());
         assertEquals("value", result.get("John"));
     }
@@ -124,11 +101,7 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("test", "value");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("value}", template.apply("{test}}"));
+        assertEquals("value}", MapTemplate.mark("{test}}").apply(replacer(map)));
     }
 
     @Test
@@ -136,11 +109,7 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("test_{property}_test", "Success");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
-        assertEquals("Success", template.apply("{test_\\{property}_test}"));
+        assertEquals("Success", MapTemplate.mark("{test_\\{property}_test}").apply(replacer(map)));
     }
 
     @Test
@@ -148,19 +117,15 @@ public class NestedVariableTest {
         Map<String, Object> map = new HashMap<>();
         map.put("test", "Success");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
-
         // One { is remains, one { is matched with }
-        assertEquals("{Success", template.apply("{{test}"));
+        assertEquals("{Success", MapTemplate.mark("{{test}").apply(replacer(map)));
     }
 
     @Test
     public void testEscapedNestedVariableNoVariableMap() {
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder().build());
+        Function<String, Object> replacer = VariableStringReplacer.builder().build();
 
-        assertEquals("{test_{property}_test}", template.apply("{test_\\{property}_test}"));
+        assertEquals("{test_{property}_test}", MapTemplate.mark("{test_\\{property}_test}").apply(replacer));
     }
 
     @Test
@@ -170,10 +135,27 @@ public class NestedVariableTest {
         map.put("test2", "Val2");
         map.put("test1}{test2", "Wrong");
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
-                .setVariableMap(map)
-                .build());
+        assertEquals("Val1Val2", MapTemplate.mark("{test1}{test2}").apply(replacer(map)));
+    }
 
-        assertEquals("Val1Val2", template.apply("{test1}{test2}"));
+    @Test
+    public void testEmptyValueBeforeAnotherVariable() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("empty", "");
+        map.put("name", "John");
+
+        assertEquals(" John", MapTemplate.mark("{empty} {name}").apply(replacer(map)));
+        assertEquals("John", MapTemplate.mark("{{empty}name}").apply(replacer(map)));
+    }
+
+    @Test
+    public void testNestedVariableAfterAnotherVariable() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("a", "1");
+        map.put("property", "name");
+        map.put("test_name_value", "Result");
+
+        assertEquals("1Result", MapTemplate.mark("{a}{test_{property}_value}").apply(replacer(map)));
+        assertEquals("1 Result", MapTemplate.mark("{a} {test_{property}_value}").apply(replacer(map)));
     }
 }

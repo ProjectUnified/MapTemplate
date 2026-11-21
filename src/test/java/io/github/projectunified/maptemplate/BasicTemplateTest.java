@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class BasicTemplateTest {
     @Test
@@ -15,32 +17,52 @@ public class BasicTemplateTest {
         map.put("name", "John");
         map.put("age", 25);
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
+        Function<String, Object> replacer = VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build());
+                .build();
 
-        assertEquals("John", template.apply("{name}"));
-        assertEquals(25, template.apply("{age}"));
-        assertEquals("Hello John, age 25", template.apply("Hello {name}, age {age}"));
+        assertEquals("John", MapTemplate.mark("{name}").apply(replacer));
+        assertEquals(25, MapTemplate.mark("{age}").apply(replacer));
+        assertEquals("Hello John, age 25", MapTemplate.mark("Hello {name}, age {age}").apply(replacer));
     }
 
     @Test
     public void testMissingVariable() {
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
+        Function<String, Object> replacer = VariableStringReplacer.builder()
                 .setVariableMap(Collections.singletonMap("name", "John"))
-                .build());
+                .build();
 
-        assertEquals("{missing}", template.apply("{missing}"));
-        assertEquals("Hello John, {missing}", template.apply("Hello {name}, {missing}"));
+        assertEquals("{missing}", MapTemplate.mark("{missing}").apply(replacer));
+        assertEquals("Hello John, {missing}", MapTemplate.mark("Hello {name}, {missing}").apply(replacer));
     }
 
     @Test
     public void testEmptyMap() {
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
+        Function<String, Object> replacer = VariableStringReplacer.builder()
                 .setVariableMap(Collections.emptyMap())
-                .build());
+                .build();
 
-        assertEquals("{name}", template.apply("{name}"));
+        assertEquals("{name}", MapTemplate.mark("{name}").apply(replacer));
+    }
+
+    @Test
+    public void testUnchangedStringsAreNotCopied() {
+        String plain = "no markers here";
+        String unknown = "{name}";
+        VariableStringReplacer replacer = VariableStringReplacer.builder()
+                .setVariableMap(Collections.emptyMap())
+                .build();
+
+        assertSame(plain, replacer.apply(plain));
+        assertSame(unknown, replacer.apply(unknown));
+    }
+
+    @Test
+    public void testDirectConstructor() {
+        VariableStringReplacer replacer = new VariableStringReplacer("{", "}", "\\",
+                Collections.singletonMap("name", "John")::get);
+
+        assertEquals("John", MapTemplate.mark("{name}").apply(replacer));
     }
 
     @Test
@@ -48,10 +70,10 @@ public class BasicTemplateTest {
         Map<String, Object> map = new HashMap<>();
         map.put("name", null);
 
-        MapTemplate template = new MapTemplate(VariableStringReplacer.builder()
+        Function<String, Object> replacer = VariableStringReplacer.builder()
                 .setVariableMap(map)
-                .build());
+                .build();
 
-        assertEquals("{name}", template.apply("{name}"));
+        assertEquals("{name}", MapTemplate.mark("{name}").apply(replacer));
     }
 }

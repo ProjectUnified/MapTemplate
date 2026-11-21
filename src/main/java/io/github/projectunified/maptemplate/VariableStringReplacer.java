@@ -1,15 +1,16 @@
 package io.github.projectunified.maptemplate;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 
 /**
  * Resolves {@code {name}} markers in a string through a variable function.
- * Use {@link #builder()} or {@link #VariableStringReplacer(Options)} to create one, and pass it to
- * {@link MapTemplate} as the string replacer.
+ * Use {@link #builder()} or {@link #VariableStringReplacer(String, String, String, Function)} to create one, and pass
+ * it to {@link MapTemplate} as the string replacer.
+ * <p>
+ * The markers can be changed, and when the start marker is also the end marker the occurrences alternate between
+ * opening and closing, which gives the {@code %name%} style.
  */
 public class VariableStringReplacer implements Function<String, Object> {
     /**
@@ -31,19 +32,22 @@ public class VariableStringReplacer implements Function<String, Object> {
     private final Function<String, Object> variableFunction;
 
     /**
-     * Create a new replacer with the given options.
+     * Create a new replacer with the given markers and variable function.
      *
-     * @param options the options
+     * @param startVariable    the string that indicates the start of a variable (e.g. "{")
+     * @param endVariable      the string that indicates the end of a variable (e.g. "}")
+     * @param escapeChar       the string used to escape markers (e.g. "\\")
+     * @param variableFunction the function resolving a variable name, returning {@code null} for unknown names
      */
-    public VariableStringReplacer(Options options) {
-        this.startVariable = options.getStartVariable();
-        this.endVariable = options.getEndVariable();
-        this.escapeChar = options.getEscapeChar();
-        this.variableFunction = options.getVariableFunction();
+    public VariableStringReplacer(String startVariable, String endVariable, String escapeChar, Function<String, Object> variableFunction) {
+        this.startVariable = startVariable;
+        this.endVariable = endVariable;
+        this.escapeChar = escapeChar;
+        this.variableFunction = variableFunction;
     }
 
     /**
-     * Create a new builder for {@link Options}.
+     * Create a new builder, starting from the default markers and no variables.
      *
      * @return the builder
      */
@@ -57,169 +61,216 @@ public class VariableStringReplacer implements Function<String, Object> {
             return string;
         }
 
-        StringBuilder content = new StringBuilder(string);
-        Deque<Opener> stack = new ArrayDeque<>();
+        int length = string.length();
+
+        // A marker is only closed by an end marker: without one there is nothing to parse
+        if (!string.contains(endVariable)) {
+            return string;
+        }
+
+        // The result is built next to the input instead of inside a copy of it, and only once something actually
+        // changes. "out" holds the output so far, "flushed" how much of the input it covers, so the text between
+        // them is still the untouched input: a string with nothing to replace is never copied.
+        // With the same string as start and end marker, occurrences alternate between opening and closing.
+        boolean pairedMarker = startVariable.equals(endVariable);
+        StringBuilder out = null;
+        int flushed = 0;
+        int changes = 0;
+        Opener[] stack = new Opener[4];
+        int depth = 0;
         int i = 0;
 
-        while (i < content.length()) {
-            int start = content.indexOf(startVariable, i);
-            int end = content.indexOf(endVariable, i);
+        while (i < length) {
+            boolean isStart;
+            int markerPos;
+            if (pairedMarker) {
+                markerPos = string.indexOf(startVariable, i);
 
-            // No more variables can be resolved if there's no end marker
-            if (end == -1) {
-                break;
+                // No more variables can be resolved if there's no marker left
+                if (markerPos < 0) {
+                    break;
+                }
+                isStart = (depth == 0);
+            } else {
+                int start = string.indexOf(startVariable, i);
+                int end = string.indexOf(endVariable, i);
+
+                // No more variables can be resolved if there's no end marker
+                if (end < 0) {
+                    break;
+                }
+
+                // Determine if we are processing a start marker or an end marker
+                isStart = (start >= 0 && start < end);
+                markerPos = isStart ? start : end;
             }
-
-            // Determine if we are processing a start marker or an end marker
-            boolean isStart = (start != -1 && start < end);
-            int markerPos = isStart ? start : end;
             String marker = isStart ? startVariable : endVariable;
 
-            // 1. Unescape the marker and its prefix (e.g., \\{ -> \{ or \\\\{ -> \\{)
-            int escapeCount = countPrefix(content, markerPos, escapeChar);
-            int escapeStart = markerPos - (escapeCount * escapeChar.length());
-            String reducedEscapes = repeat(escapeChar, escapeCount / 2);
+            // 1. Count the escapes before the marker (e.g. \\{ -> \{) and remember if the marker is escaped
+            int escapeCount = countPrefix(string, markerPos, escapeChar);
             boolean escaped = (escapeCount % 2 != 0);
+            int escapeStart = markerPos - (escapeCount * escapeChar.length());
 
-            content.replace(escapeStart, markerPos + marker.length(), reducedEscapes + marker);
-            int actualPos = escapeStart + reducedEscapes.length();
-
-            // 2. Handle the marker logic based on its type and escape state
+            // 2. A start marker opens a variable, and remembers where its name starts
             if (isStart) {
-                // If it's a start marker, push to stack (tracking if it was escaped)
-                stack.push(new Opener(actualPos, escaped));
-                i = actualPos + startVariable.length();
-            } else if (escaped || stack.isEmpty()) {
-                // Escaped end marker or unmatched end marker: just skip it
-                i = actualPos + endVariable.length();
-            } else {
-                // Balanced unescaped end marker found: perform variable resolution
-                Opener opener = stack.pop();
-                if (opener.isEscaped) {
-                    // This end balances an escaped start (balanced literal block): skip it
-                    i = actualPos + endVariable.length();
-                } else {
-                    // We found a variable name between the unescaped start and end markers
-                    String variableName = content.substring(opener.index + startVariable.length(), actualPos);
-                    Object value = variableFunction.apply(variableName);
-
-                    if (value != null) {
-                        Object resolved = value instanceof String ? apply((String) value) : value;
-
-                        // If the entire original string was precisely this variable, return the object directly
-                        if (opener.index == 0 && actualPos + endVariable.length() == content.length()) {
-                            return resolved;
+                if (escapeCount > 0) {
+                    out = writeEscapes(out, length, string, flushed, escapeStart, escapeCount, marker);
+                    changes++;
+                    flushed = markerPos + marker.length();
+                    // With the same marker for start and end, an escaped marker is only a literal one: it does not
+                    // open a literal block, so a stray escape cannot hide a variable behind it
+                    if (!pairedMarker || !escaped) {
+                        if (depth == stack.length) {
+                            stack = Arrays.copyOf(stack, depth * 2);
                         }
-
-                        // Otherwise, replace the `{variable}` text with its string representation
-                        String replacement = Objects.toString(resolved);
-                        content.replace(opener.index, actualPos + endVariable.length(), replacement);
-                        i = opener.index + replacement.length();
-                    } else {
-                        // Variable not found in map: leave it as-is and continue
-                        i = actualPos + endVariable.length();
+                        stack[depth++] = new Opener(out.length(), flushed, changes, escaped);
                     }
+                } else {
+                    // A plain start marker writes nothing: its position is known from the input and the output
+                    int outStart = (out == null ? 0 : out.length()) + (markerPos - flushed) + startVariable.length();
+                    if (depth == stack.length) {
+                        stack = Arrays.copyOf(stack, depth * 2);
+                    }
+                    stack[depth++] = new Opener(outStart, markerPos + startVariable.length(), changes, escaped);
                 }
+                i = markerPos + marker.length();
+                continue;
             }
+
+            // 3. An unescaped end marker balancing an unescaped start marker resolves a variable
+            Opener opener = (!escaped && depth > 0) ? stack[--depth] : null;
+
+            if (opener == null || opener.isEscaped) {
+                // Escaped end marker, unmatched end marker, or the end of a literal block: keep it, resolve nothing
+                if (escapeCount > 0) {
+                    out = writeEscapes(out, length, string, flushed, escapeStart, escapeCount, marker);
+                    changes++;
+                    flushed = markerPos + marker.length();
+                }
+                i = markerPos + marker.length();
+                continue;
+            }
+
+            // 4. Read the variable name between the unescaped start and end markers. While nothing inside the
+            // variable has changed, its name is still part of the input and needs no copy at all.
+            boolean modified = (escapeCount > 0 || changes != opener.changesAtPush);
+            String variableName;
+            if (modified) {
+                if (out == null) {
+                    out = new StringBuilder(length);
+                }
+                out.append(string, flushed, escapeStart);
+                if (escapeCount > 0) {
+                    appendEscapes(out, escapeCount / 2);
+                    changes++;
+                }
+                flushed = markerPos;
+                variableName = out.substring(opener.outStart);
+            } else {
+                variableName = string.substring(opener.inStart, markerPos);
+            }
+
+            Object value = variableFunction.apply(variableName);
+            int markerEnd = markerPos + marker.length();
+
+            if (value == null) {
+                // Variable not found: leave it as it is and continue
+                if (modified) {
+                    out.append(marker);
+                    flushed = markerEnd;
+                }
+                i = markerEnd;
+                continue;
+            }
+
+            Object resolved = value instanceof String ? apply((String) value) : value;
+
+            // If the entire original string was precisely this variable, return the object directly
+            if (out == null && opener.inStart == startVariable.length() && markerEnd == length) {
+                return resolved;
+            }
+
+            // Otherwise, replace the marker and the name in it with the string representation of the value
+            if (out == null) {
+                out = new StringBuilder(length);
+            }
+            int markerStart = opener.inStart - startVariable.length();
+            if (flushed < markerStart) {
+                out.append(string, flushed, markerStart);
+                flushed = markerStart;
+            }
+            // Drop the variable from the output and put the value in its place
+            out.setLength(opener.outStart - startVariable.length());
+            out.append(resolved);
+            changes++;
+            flushed = markerEnd;
+            i = markerEnd;
         }
-        return content.toString();
+
+        if (out == null) {
+            return string;
+        }
+        out.append(string, flushed, length);
+        return out.toString();
     }
 
-    private int countPrefix(StringBuilder sb, int end, String prefix) {
-        int count = 0;
+    /**
+     * Appends the input up to the escapes, then the marker with half of its escapes dropped.
+     *
+     * @param out         the output, created when the input is first copied into it
+     * @param length      the length of the input
+     * @param input       the string being replaced
+     * @param flushed     how much of the input the output already covers
+     * @param escapeStart the start of the escapes before the marker
+     * @param escapeCount the number of escapes before the marker
+     * @param marker      the marker that follows the escapes
+     * @return the output
+     */
+    private StringBuilder writeEscapes(StringBuilder out, int length, String input, int flushed, int escapeStart, int escapeCount, String marker) {
+        if (out == null) {
+            out = new StringBuilder(length);
+        }
+        out.append(input, flushed, escapeStart);
+        appendEscapes(out, escapeCount / 2);
+        out.append(marker);
+        return out;
+    }
+
+    private int countPrefix(String string, int end, String prefix) {
         int length = prefix.length();
-        for (int i = end - length; i >= 0 && sb.substring(i, i + length).equals(prefix); i -= length) {
+        if (length == 0) {
+            return 0;
+        }
+        int count = 0;
+        outer:
+        for (int i = end - length; i >= 0; i -= length) {
+            for (int j = 0; j < length; j++) {
+                if (string.charAt(i + j) != prefix.charAt(j)) {
+                    break outer;
+                }
+            }
             count++;
         }
         return count;
     }
 
-    private String repeat(String str, int count) {
-        StringBuilder sb = new StringBuilder();
+    private void appendEscapes(StringBuilder out, int count) {
         for (int i = 0; i < count; i++) {
-            sb.append(str);
+            out.append(escapeChar);
         }
-        return sb.toString();
     }
 
     private static class Opener {
-        final int index;
+        final int outStart;
+        final int inStart;
+        final int changesAtPush;
         final boolean isEscaped;
 
-        Opener(int index, boolean isEscaped) {
-            this.index = index;
+        Opener(int outStart, int inStart, int changesAtPush, boolean isEscaped) {
+            this.outStart = outStart;
+            this.inStart = inStart;
+            this.changesAtPush = changesAtPush;
             this.isEscaped = isEscaped;
-        }
-    }
-
-    /**
-     * Configuration options for a {@link VariableStringReplacer}.
-     * This class is immutable; use {@link Builder} to create instances.
-     */
-    public static class Options {
-        private final String startVariable;
-        private final String endVariable;
-        private final String escapeChar;
-        private final Function<String, Object> variableFunction;
-
-        /**
-         * Create a new instance of {@link Options} with the specified configuration.
-         *
-         * @param startVariable    the string that indicates the start of a variable
-         * @param endVariable      the string that indicates the end of a variable
-         * @param escapeChar       the character used to escape markers
-         * @param variableFunction the function used to resolve variable values by name
-         */
-        public Options(String startVariable, String endVariable, String escapeChar, Function<String, Object> variableFunction) {
-            this.startVariable = startVariable;
-            this.endVariable = endVariable;
-            this.escapeChar = escapeChar;
-            this.variableFunction = variableFunction;
-        }
-
-        /**
-         * The string that indicates the start of a variable (e.g., "{").
-         *
-         * @return start marker
-         */
-        public String getStartVariable() {
-            return startVariable;
-        }
-
-        /**
-         * The string that indicates the end of a variable (e.g., "}").
-         *
-         * @return end marker
-         */
-        public String getEndVariable() {
-            return endVariable;
-        }
-
-        /**
-         * The character used to escape markers (e.g., "\").
-         *
-         * @return escape character
-         */
-        public String getEscapeChar() {
-            return escapeChar;
-        }
-
-        /**
-         * The function used to resolve variable values by name.
-         *
-         * @return variable resolution function
-         */
-        public Function<String, Object> getVariableFunction() {
-            return variableFunction;
-        }
-
-        /**
-         * Create a new {@link Builder} initialized with these options.
-         *
-         * @return a new builder
-         */
-        public Builder toBuilder() {
-            return new Builder(this);
         }
     }
 
@@ -232,14 +283,10 @@ public class VariableStringReplacer implements Function<String, Object> {
         private String escapeChar = ESCAPE_CHAR;
         private Function<String, Object> variableFunction = key -> null;
 
+        /**
+         * Create a builder starting from the default markers and no variables.
+         */
         public Builder() {
-        }
-
-        public Builder(Options options) {
-            this.startVariable = options.getStartVariable();
-            this.endVariable = options.getEndVariable();
-            this.escapeChar = options.getEscapeChar();
-            this.variableFunction = options.getVariableFunction();
         }
 
         /**
@@ -299,12 +346,12 @@ public class VariableStringReplacer implements Function<String, Object> {
         }
 
         /**
-         * Builds the {@link VariableStringReplacer} with the configured options.
+         * Builds the {@link VariableStringReplacer} with the configured markers and variable function.
          *
          * @return a new VariableStringReplacer
          */
         public VariableStringReplacer build() {
-            return new VariableStringReplacer(new Options(startVariable, endVariable, escapeChar, variableFunction));
+            return new VariableStringReplacer(startVariable, endVariable, escapeChar, variableFunction);
         }
     }
 }

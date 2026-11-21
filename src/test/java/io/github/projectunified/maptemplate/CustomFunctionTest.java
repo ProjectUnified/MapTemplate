@@ -6,16 +6,17 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class CustomFunctionTest {
     @Test
     public void testFunction() {
-        MapTemplate template = new MapTemplate(string -> string.replace("[name]", "John"));
+        Function<String, Object> replacer = string -> string.replace("[name]", "John");
 
-        assertEquals("Hello John", template.apply("Hello [name]"));
-        assertEquals("{name}", template.apply("{name}"));
+        assertEquals("Hello John", MapTemplate.mark("Hello [name]").apply(replacer));
+        assertEquals("{name}", MapTemplate.mark("{name}").apply(replacer));
     }
 
     @Test
@@ -25,14 +26,14 @@ public class CustomFunctionTest {
         map.put("b", "done");
 
         // A function returning a collection gets its elements processed by the template
-        MapTemplate template = new MapTemplate(string -> string.startsWith("@")
+        Function<String, Object> replacer = string -> string.startsWith("@")
                 ? map.get(string.substring(1))
-                : string);
+                : string;
 
-        assertEquals(Arrays.asList("done"), template.apply("@a"));
-        assertEquals("done", template.apply("@b"));
+        assertEquals(Arrays.asList("done"), MapTemplate.mark("@a").apply(replacer));
+        assertEquals("done", MapTemplate.mark("@b").apply(replacer));
 
-        List<?> result = (List<?>) template.apply(Arrays.asList("@b", "plain"));
+        List<?> result = (List<?>) MapTemplate.mark(Arrays.asList("@b", "plain")).apply(replacer);
         assertEquals(Arrays.asList("done", "plain"), result);
     }
 }
