@@ -36,7 +36,7 @@ No dependencies, no reflection, Java 8 and up.
 <dependency>
     <groupId>io.github.projectunified</groupId>
     <artifactId>map-template</artifactId>
-    <version>3.0.0</version>
+    <version>3.0.1</version>
 </dependency>
 ```
 
