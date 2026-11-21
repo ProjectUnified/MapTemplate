@@ -83,25 +83,72 @@ public final class MapTemplate {
      * @return the flagged node for that collection
      */
     private static Node collectionNode(Collection<?> input) {
-        List<Element> flagged = new ArrayList<>(input.size());
+        boolean set = input instanceof Set;
+        if (isFixedContent(input)) {
+            // Nothing in it can change, so applying it only copies the flagged values
+            Collection<Object> flagged = set ? new HashSet<>(input) : new ArrayList<>(input);
+            return stringReplacer -> set ? new HashSet<>(flagged) : new ArrayList<>(flagged);
+        }
+
+        List<Element> elements = new ArrayList<>(input.size());
         for (Object element : input) {
             // Only a string can resolve to a collection, and only those are flattened into the result
-            flagged.add(new Element(node(element), element instanceof String));
+            elements.add(new Element(node(element), element instanceof String));
         }
-        Element[] elements = flagged.toArray(new Element[0]);
+        Element[] flagged = elements.toArray(new Element[0]);
 
-        if (input instanceof Set) {
+        if (set) {
             return stringReplacer -> {
-                Set<Object> result = new HashSet<>(elements.length);
-                addElements(result, elements, stringReplacer);
+                Set<Object> result = new HashSet<>(flagged.length);
+                addElements(result, flagged, stringReplacer);
                 return result;
             };
         }
         return stringReplacer -> {
-            List<Object> result = new ArrayList<>(elements.length);
-            addElements(result, elements, stringReplacer);
+            List<Object> result = new ArrayList<>(flagged.length);
+            addElements(result, flagged, stringReplacer);
             return result;
         };
+    }
+
+    /**
+     * Whether a value is potentially dynamic. Only a string, a collection and a map can resolve to something else.
+     *
+     * @param obj the value to test
+     * @return true if the value is potentially dynamic
+     */
+    private static boolean isPotentiallyDynamic(Object obj) {
+        return obj instanceof String || obj instanceof Collection || obj instanceof Map;
+    }
+
+    /**
+     * Whether applying the collection can only copy it.
+     *
+     * @param input the collection to test
+     * @return true if no element can change
+     */
+    private static boolean isFixedContent(Collection<?> input) {
+        for (Object element : input) {
+            if (isPotentiallyDynamic(element)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether applying the map can only copy it.
+     *
+     * @param input the map to test
+     * @return true if no key and no value can change
+     */
+    private static boolean isFixedContent(Map<?, ?> input) {
+        for (Map.Entry<?, ?> entry : input.entrySet()) {
+            if (isPotentiallyDynamic(entry.getKey()) || isPotentiallyDynamic(entry.getValue())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -129,26 +176,32 @@ public final class MapTemplate {
      * @return the flagged node for that map
      */
     private static Node mapNode(Map<?, ?> input) {
-        List<Entry> flagged = new ArrayList<>(input.size());
+        if (isFixedContent(input)) {
+            // Nothing in it can change, so applying it only copies the flagged entries
+            Map<Object, Object> flagged = copyMap(input);
+            return stringReplacer -> copyMap(flagged);
+        }
+
+        List<Entry> elements = new ArrayList<>(input.size());
         for (Map.Entry<?, ?> entry : input.entrySet()) {
             // Only a string key can resolve to a map, and only those are merged into the result
-            flagged.add(new Entry(node(entry.getKey()), entry.getKey() instanceof String, node(entry.getValue())));
+            elements.add(new Entry(node(entry.getKey()), entry.getKey() instanceof String, node(entry.getValue())));
         }
-        Entry[] entries = flagged.toArray(new Entry[0]);
+        Entry[] flagged = elements.toArray(new Entry[0]);
 
         boolean concurrent = input instanceof ConcurrentMap;
         boolean linked = input instanceof LinkedHashMap;
         return stringReplacer -> {
             Map<Object, Object> result;
             if (concurrent) {
-                result = new ConcurrentHashMap<>(entries.length);
+                result = new ConcurrentHashMap<>(flagged.length);
             } else if (linked) {
-                result = new LinkedHashMap<>(entries.length);
+                result = new LinkedHashMap<>(flagged.length);
             } else {
-                result = new HashMap<>(entries.length);
+                result = new HashMap<>(flagged.length);
             }
 
-            for (Entry entry : entries) {
+            for (Entry entry : flagged) {
                 Object key = entry.key.apply(stringReplacer);
                 if (entry.merge && key instanceof Map) {
                     // A key variable can stand in for a whole map: its entries are merged into the result
@@ -159,6 +212,21 @@ public final class MapTemplate {
             }
             return result;
         };
+    }
+
+    /**
+     * Copies a map into a new one of the same kind.
+     *
+     * @param input the map to copy
+     * @return a new map holding the entries of the input
+     */
+    private static Map<Object, Object> copyMap(Map<?, ?> input) {
+        if (input instanceof ConcurrentMap) {
+            return new ConcurrentHashMap<>(input);
+        } else if (input instanceof LinkedHashMap) {
+            return new LinkedHashMap<>(input);
+        }
+        return new HashMap<>(input);
     }
 
     /**

@@ -5,9 +5,11 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,6 +56,52 @@ public class PreFlagTest {
         MapTemplate.mark(Arrays.asList("a", "b", 1)).apply(replacer);
 
         assertEquals(Arrays.asList("a", "b"), seen);
+    }
+
+    @Test
+    public void testFixedContentNeedsNoReplacement() {
+        Function<String, Object> failing = string -> fail("should not be replaced: " + string);
+
+        List<?> list = (List<?>) MapTemplate.mark(Arrays.asList(1, true, 2.5)).apply(failing);
+        assertEquals(Arrays.asList(1, true, 2.5), list);
+        assertInstanceOf(ArrayList.class, list);
+        assertInstanceOf(HashSet.class, MapTemplate.mark(new HashSet<>(Arrays.asList(1, 2))).apply(failing));
+        assertInstanceOf(LinkedHashMap.class, MapTemplate.mark(new LinkedHashMap<>(Collections.singletonMap(1, 2))).apply(failing));
+        assertInstanceOf(ConcurrentHashMap.class, MapTemplate.mark(new ConcurrentHashMap<>(Collections.singletonMap(1, 2))).apply(failing));
+    }
+
+    @Test
+    public void testFixedContentIsCopiedOnEveryApply() {
+        MapTemplate template = MapTemplate.mark(new ArrayList<>(Arrays.asList(1, 2, 3)));
+
+        List<?> first = (List<?>) template.apply(string -> string);
+        List<?> second = (List<?>) template.apply(string -> string);
+
+        assertNotSame(first, second);
+        assertEquals(first, second);
+
+        @SuppressWarnings("unchecked")
+        List<Object> mutable = (List<Object>) first;
+        mutable.set(0, 9);
+        assertEquals(Arrays.asList(1, 2, 3), template.apply(string -> string));
+    }
+
+    @Test
+    public void testFixedContentInsideAStructure() {
+        List<String> replaced = new ArrayList<>();
+        Function<String, Object> replacer = string -> {
+            replaced.add(string);
+            return string.replace("{name}", "John");
+        };
+
+        Map<String, Object> structure = new LinkedHashMap<>();
+        structure.put("{name}", Arrays.asList(1, 2, 3));
+
+        Map<?, ?> result = (Map<?, ?>) MapTemplate.mark(structure).apply(replacer);
+
+        // Only the key had to be replaced, the list holds nothing that can change
+        assertEquals(Collections.singletonList("{name}"), replaced);
+        assertEquals(Arrays.asList(1, 2, 3), result.get("John"));
     }
 
     @Test
